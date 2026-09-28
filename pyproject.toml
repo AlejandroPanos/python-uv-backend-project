@@ -7,7 +7,12 @@ authors = [
     { name = "Alejandro Paños" }
 ]
 requires-python = ">=3.14"
-dependencies = []
+dependencies = [
+    "alembic>=1.20.0",
+    "dotenv>=0.9.9",
+    "fastapi>=0.141.1",
+    "fastapi-users[sqlalchemy]>=15.0.5",
+]
 
 [project.scripts]
 project-tracker = "project_tracker:main"
