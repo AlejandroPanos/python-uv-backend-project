@@ -101,3 +101,22 @@ class Label(Base):
         String(max_length=7), nullable=False, default="#888888"
     )  # Hex color code
     UNIQUE(project_id, name)  # Ensure unique label names within a project
+
+
+class IssueLabel(Base):
+    __tablename__ = "issue_labels"
+
+    issue_id: UUID = Column(
+        UUID(as_uuid=True),
+        ForeignKey("issues.id"),
+        primary_key=True,
+        nullable=False,
+        ondelete="CASCADE",
+    )
+    label_id: UUID = Column(
+        UUID(as_uuid=True),
+        ForeignKey("labels.id"),
+        primary_key=True,
+        nullable=False,
+        ondelete="CASCADE",
+    )
