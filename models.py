@@ -67,3 +67,18 @@ class Issue(Base):
     )
     created_at: str = Column(String, nullable=False)
     updated_at: str = Column(String, nullable=False)
+
+
+class Comment(Base):
+    __tablename__ = "comments"
+
+    id: UUID = Column(UUID(as_uuid=True), primary_key=True, index=True)
+    issue_id: UUID = Column(
+        UUID(as_uuid=True), ForeignKey("issues.id"), nullable=False, ondelete="CASCADE"
+    )
+    author_id: UUID = Column(
+        UUID(as_uuid=True), ForeignKey("user.id"), nullable=False, ondelete="RESTRICT"
+    )
+    body: str = Column(String(max_length=500), nullable=False)
+    created_at: str = Column(String, nullable=False)
+    updated_at: str = Column(String, nullable=False)
