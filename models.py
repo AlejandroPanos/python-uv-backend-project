@@ -1,3 +1,5 @@
+from enum import UNIQUE
+
 from db import Base
 from sqlalchemy import Column, ForeignKey, Integer, String, Boolean, UUID, Enum
 
@@ -82,3 +84,20 @@ class Comment(Base):
     body: str = Column(String(max_length=500), nullable=False)
     created_at: str = Column(String, nullable=False)
     updated_at: str = Column(String, nullable=False)
+
+
+class Label(Base):
+    __tablename__ = "labels"
+
+    id: UUID = Column(UUID(as_uuid=True), primary_key=True, index=True)
+    project_id: UUID = Column(
+        UUID(as_uuid=True),
+        ForeignKey("projects.id"),
+        nullable=False,
+        ondelete="CASCADE",
+    )
+    name: str = Column(String(max_length=50), nullable=False)
+    color: str = Column(
+        String(max_length=7), nullable=False, default="#888888"
+    )  # Hex color code
+    UNIQUE(project_id, name)  # Ensure unique label names within a project
