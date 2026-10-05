@@ -1,4 +1,5 @@
 from fastapi import FastAPI, Depends, APIRouter
+from fastapi.middleware.cors import CORSMiddleware
 
 from contextlib import asynccontextmanager
 
@@ -22,6 +23,14 @@ app = FastAPI(
     description="A full backend project tracker with a REST API built with FastAPI.",
     version="0.1.0",
     lifespan=lifespan,
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000", "http://localhost:5173"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 api_v1 = APIRouter(prefix="/api/v1")
