@@ -7,6 +7,8 @@ from users import auth_backend, current_active_user, fastapi_users
 from db import engine, Base
 from db import User
 
+from routers import health
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -49,10 +51,5 @@ api_v1.include_router(
 )
 
 
-# Dummy route to test authentication
-@app.get("/authenticated-route")
-async def authenticated_route(user: User = Depends(current_active_user)):
-    return {"message": f"Hello {user.email}!"}
-
-
 app.include_router(api_v1)
+app.include_router(health.router)
