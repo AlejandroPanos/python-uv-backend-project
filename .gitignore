@@ -15,3 +15,6 @@ wheels/
 
 # uv files
 uv.lock
+
+# Test DB
+test.db
