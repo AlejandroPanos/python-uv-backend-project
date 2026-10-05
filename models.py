@@ -1,122 +1,125 @@
-from enum import UNIQUE
+import uuid
+from datetime import datetime
+
+from sqlalchemy import (
+    DateTime,
+    Enum,
+    ForeignKey,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+)
+from sqlalchemy.orm import Mapped, mapped_column
 
 from db import Base
-from sqlalchemy import Column, ForeignKey, Integer, String, Boolean, UUID, Enum
 
 
 class Project(Base):
     __tablename__ = "projects"
 
-    id: UUID = Column(UUID(as_uuid=True), primary_key=True, index=True)
-    owner_id: UUID = Column(
-        UUID(as_uuid=True), ForeignKey("user.id"), nullable=False, ondelete="RESTRICT"
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    owner_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("user.id", ondelete="RESTRICT")
     )
-    name: str = Column(String(max_length=120), nullable=False)
-    description: str = Column(String(max_length=500), nullable=True)
-    created_at: str = Column(String, nullable=False)
-    updated_at: str = Column(String, nullable=False)
+    name: Mapped[str] = mapped_column(String(120))
+    description: Mapped[str | None] = mapped_column(String(500))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
 
 
 class ProjectMember(Base):
     __tablename__ = "project_members"
 
-    project_id: UUID = Column(
-        UUID(as_uuid=True),
-        ForeignKey("projects.id"),
-        primary_key=True,
-        nullable=False,
-        ondelete="CASCADE",
+    project_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), primary_key=True
     )
-    user_id: UUID = Column(
-        UUID(as_uuid=True),
-        ForeignKey("user.id"),
-        primary_key=True,
-        nullable=False,
-        ondelete="CASCADE",
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("user.id", ondelete="CASCADE"), primary_key=True
     )
-    role: str = Column(
+    role: Mapped[str] = mapped_column(
         Enum("owner", "maintainer", "reporter", name="role_enum"),
         default="reporter",
-        nullable=False,
     )
-    joined_at: str = Column(String, nullable=False)
+    joined_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
 
 
 class Issue(Base):
     __tablename__ = "issues"
 
-    id: UUID = Column(UUID(as_uuid=True), primary_key=True, index=True)
-    project_id: UUID = Column(
-        UUID(as_uuid=True), ForeignKey("projects.id"), nullable=False
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    project_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("projects.id", ondelete="RESTRICT")
     )
-    reporter_id: UUID = Column(
-        UUID(as_uuid=True), ForeignKey("user.id"), nullable=False, ondelete="RESTRICT"
+    reporter_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("user.id", ondelete="RESTRICT")
     )
-    asignee_id: UUID = Column(
-        UUID(as_uuid=True), ForeignKey("user.id"), nullable=True, ondelete="SET NULL"
+    assignee_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("user.id", ondelete="SET NULL")
     )
-    title: str = Column(String(max_length=200), nullable=False)
-    body: str = Column(String(max_length=500), nullable=True)
-    status: str = Column(
+    title: Mapped[str] = mapped_column(String(200))
+    body: Mapped[str | None] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(
         Enum("open", "in_progress", "resolved", "closed", name="status_enum"),
         default="open",
-        nullable=False,
     )
-    priority: str = Column(
+    priority: Mapped[str] = mapped_column(
         Enum("low", "medium", "high", "urgent", name="priority_enum"),
         default="medium",
-        nullable=False,
     )
-    created_at: str = Column(String, nullable=False)
-    updated_at: str = Column(String, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
 
 
 class Comment(Base):
     __tablename__ = "comments"
 
-    id: UUID = Column(UUID(as_uuid=True), primary_key=True, index=True)
-    issue_id: UUID = Column(
-        UUID(as_uuid=True), ForeignKey("issues.id"), nullable=False, ondelete="CASCADE"
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    issue_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("issues.id", ondelete="CASCADE")
     )
-    author_id: UUID = Column(
-        UUID(as_uuid=True), ForeignKey("user.id"), nullable=False, ondelete="RESTRICT"
+    author_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("user.id", ondelete="RESTRICT")
     )
-    body: str = Column(String(max_length=500), nullable=False)
-    created_at: str = Column(String, nullable=False)
-    updated_at: str = Column(String, nullable=False)
+    body: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
 
 
 class Label(Base):
     __tablename__ = "labels"
-
-    id: UUID = Column(UUID(as_uuid=True), primary_key=True, index=True)
-    project_id: UUID = Column(
-        UUID(as_uuid=True),
-        ForeignKey("projects.id"),
-        nullable=False,
-        ondelete="CASCADE",
+    __table_args__ = (
+        UniqueConstraint("project_id", "name", name="uq_labels_project_id_name"),
     )
-    name: str = Column(String(max_length=50), nullable=False)
-    color: str = Column(
-        String(max_length=7), nullable=False, default="#888888"
-    )  # Hex color code
-    UNIQUE(project_id, name)  # Ensure unique label names within a project
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    project_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE")
+    )
+    name: Mapped[str] = mapped_column(String(50))
+    color: Mapped[str] = mapped_column(String(7), default="#888888")  # hex color
 
 
 class IssueLabel(Base):
     __tablename__ = "issue_labels"
 
-    issue_id: UUID = Column(
-        UUID(as_uuid=True),
-        ForeignKey("issues.id"),
-        primary_key=True,
-        nullable=False,
-        ondelete="CASCADE",
+    issue_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("issues.id", ondelete="CASCADE"), primary_key=True
     )
-    label_id: UUID = Column(
-        UUID(as_uuid=True),
-        ForeignKey("labels.id"),
-        primary_key=True,
-        nullable=False,
-        ondelete="CASCADE",
+    label_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("labels.id", ondelete="CASCADE"), primary_key=True
     )
