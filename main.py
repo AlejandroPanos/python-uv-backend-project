@@ -8,7 +8,7 @@ from users import auth_backend, current_active_user, fastapi_users
 from db import engine, Base
 from db import User
 
-from routers import health
+from routers import health, projects
 
 
 @asynccontextmanager
@@ -62,3 +62,4 @@ api_v1.include_router(
 
 app.include_router(api_v1)
 app.include_router(health.router)
+app.include_router(projects.router)
