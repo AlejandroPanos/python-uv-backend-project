@@ -2,6 +2,7 @@ import uuid
 
 from fastapi_users import schemas
 from pydantic import BaseModel
+from typing import Literal
 
 
 class UserRead(schemas.BaseUser[uuid.UUID]):
@@ -25,3 +26,9 @@ class CreateProject(BaseModel):
 class UpdateProject(BaseModel):
     name: str
     description: str | None = None
+
+
+# Membership Schemas
+class CreateMembership(BaseModel):
+    email: str
+    role: Literal["maintainer", "reporter"] = "reporter"
