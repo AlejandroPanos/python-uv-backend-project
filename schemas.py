@@ -24,4 +24,4 @@ class CreateProject(BaseModel):
 
 class UpdateProject(BaseModel):
     name: str
-    description: str
+    description: str | None = None
