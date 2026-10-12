@@ -147,3 +147,55 @@ async def update_member_role(
 
     await session.refresh(member)
     return member
+
+
+@router.delete(
+    "/projects/{project_id}/members/{user_id}", status_code=status.HTTP_204_NO_CONTENT
+)
+async def remove_member(
+    project_id: uuid.UUID,
+    user_id: uuid.UUID,
+    user: User = Depends(current_active_user),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """
+    Endpoint to remove a specific project member for the authenticated user.
+    """
+    project = await session.get(Project, project_id)
+    if project is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Project not found"
+        )
+
+    # Only owner or maintainer can remove members
+    caller_role = await session.scalar(
+        select(ProjectMember.role).where(
+            ProjectMember.project_id == project_id, ProjectMember.user_id == user.id
+        )
+    )
+
+    if project.owner_id != user.id and caller_role not in ["owner", "maintainer"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the project owner or maintainers can remove members",
+        )
+
+    member = await session.get(
+        ProjectMember, {"project_id": project_id, "user_id": user_id}
+    )
+    if member is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Member not found"
+        )
+
+    await session.delete(member)
+    try:
+        await session.commit()
+    except IntegrityError as e:
+        await session.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Failed to remove member: {str(e)}",
+        )
+
+    return None
