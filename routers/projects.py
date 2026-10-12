@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Response
 from datetime import datetime
 from starlette import status
 from sqlalchemy.future import select
@@ -89,3 +89,24 @@ async def update_project(
     await session.commit()
     await session.refresh(project)
     return project
+
+
+@router.delete("/projects/{project_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_project(
+    project_id: uuid.UUID,
+    user: User = Depends(current_active_user),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """
+    Endpoint to delete a specific project by its ID for the authenticated user.
+    """
+    result = await session.execute(
+        select(Project).where(Project.id == project_id, Project.owner_id == user.id)
+    )
+    project = result.scalars().first()
+    if not project:
+        return {"detail": "Project not found"}
+
+    await session.delete(project)
+    await session.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
