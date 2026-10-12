@@ -20,3 +20,8 @@ class UserUpdate(schemas.BaseUserUpdate):
 class CreateProject(BaseModel):
     name: str
     description: str
+
+
+class UpdateProject(BaseModel):
+    name: str
+    description: str
