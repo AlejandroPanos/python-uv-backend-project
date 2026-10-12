@@ -6,7 +6,7 @@ from starlette import status
 from sqlalchemy.future import select
 
 from db import User, get_async_session, AsyncSession
-from schemas import CreateProject
+from schemas import CreateProject, UpdateProject
 from users import current_active_user
 from models import Project
 
@@ -62,4 +62,30 @@ async def get_project(
     project = result.scalars().first()
     if not project:
         return {"detail": "Project not found"}
+    return project
+
+
+@router.patch("/projects/{project_id}", status_code=status.HTTP_200_OK)
+async def update_project(
+    project_id: uuid.UUID,
+    body: UpdateProject,
+    user: User = Depends(current_active_user),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """
+    Endpoint to update a specific project by its ID for the authenticated user.
+    """
+    result = await session.execute(
+        select(Project).where(Project.id == project_id, Project.owner_id == user.id)
+    )
+    project = result.scalars().first()
+    if not project:
+        return {"detail": "Project not found"}
+    for key, value in body.model_dump().items():
+        setattr(project, key, value)
+    project.updated_at = datetime.utcnow()
+
+    session.add(project)
+    await session.commit()
+    await session.refresh(project)
     return project
