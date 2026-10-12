@@ -32,3 +32,7 @@ class UpdateProject(BaseModel):
 class CreateMembership(BaseModel):
     email: str
     role: Literal["maintainer", "reporter"] = "reporter"
+
+
+class UpdateMembership(BaseModel):
+    role: Literal["maintainer", "reporter"] = "reporter"
