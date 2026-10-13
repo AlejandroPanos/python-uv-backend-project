@@ -1,6 +1,7 @@
 import uuid
-
+from datetime import datetime
 from fastapi_users import schemas
+from pydantic import ConfigDict
 from pydantic import BaseModel
 from typing import Literal
 
@@ -18,9 +19,39 @@ class UserUpdate(schemas.BaseUserUpdate):
 
 
 # Project Schemas
-class CreateProject(BaseModel):
+class ProjectSchema(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    owner_id: uuid.UUID
     name: str
     description: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class GetProjectsResponse(BaseModel):
+    items: list[ProjectSchema] = []
+    total: int = 0
+    limit: int = 20
+    offset: int = 0
+
+
+class CreateProjectRequest(BaseModel):
+    name: str
+    description: str
+
+
+class CreateProjectResponse(BaseModel):
+    id: uuid.UUID
+    name: str
+    description: str
+    owner_id: uuid.UUID
+    my_role: Literal["owner", "maintainer", "reporter"] = "owner"
+    member_count: int
+    open_issue_count: int = 0
+    created_at: datetime
+    updated_at: datetime
 
 
 class UpdateProject(BaseModel):
