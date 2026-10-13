@@ -6,9 +6,15 @@ from starlette import status
 from sqlalchemy.future import select
 
 from db import User, get_async_session, AsyncSession
-from schemas import CreateProject, UpdateProject
+from schemas import (
+    CreateProjectRequest,
+    CreateProjectResponse,
+    GetProjectsResponse,
+    UpdateProject,
+    ProjectSchema,
+)
 from users import current_active_user
-from models import Project
+from models import Project, ProjectMember
 
 router = APIRouter(prefix="/api/v1", tags=["projects"])
 
@@ -17,23 +23,32 @@ router = APIRouter(prefix="/api/v1", tags=["projects"])
 async def list_projects(
     user: User = Depends(current_active_user),
     session: AsyncSession = Depends(get_async_session),
+    limit: int | None = 20,
+    offset: int | None = 0,
 ):
     """
     Endpoint to list all projects for the authenticated user.
     """
-    result = await session.execute(select(Project).where(Project.owner_id == user.id))
+    result = await session.execute(
+        select(Project).where(Project.owner_id == user.id).limit(limit).offset(offset)
+    )
     user_projects = result.scalars().all()
-    return user_projects
+    return GetProjectsResponse(
+        items=[ProjectSchema.model_validate(p) for p in user_projects],
+        total=len(user_projects),
+        limit=limit,
+        offset=offset,
+    )
 
 
 @router.post("/projects", status_code=status.HTTP_201_CREATED)
 async def create_project(
-    body: CreateProject,
+    body: CreateProjectRequest,
     session: AsyncSession = Depends(get_async_session),
     user: User = Depends(current_active_user),
 ):
     """
-    Endpoint to create a new project for the authenticated user.
+    Endpoint to create a new project for the authenticated user and add creator as owner.
     """
     new_project = Project(
         owner_id=user.id,
@@ -44,7 +59,29 @@ async def create_project(
     session.add(new_project)
     await session.commit()
     await session.refresh(new_project)
-    return new_project
+
+    # Add the creator as the project owner in the ProjectMember table
+    owner_membership = ProjectMember(
+        project_id=new_project.id,
+        user_id=user.id,
+        role="owner",
+        joined_at=datetime.utcnow(),
+    )
+    session.add(owner_membership)
+    await session.commit()
+    await session.refresh(owner_membership)
+
+    return CreateProjectResponse(
+        id=new_project.id,
+        name=new_project.name,
+        description=new_project.description,
+        owner_id=new_project.owner_id,
+        my_role="owner",
+        member_count=1,
+        open_issue_count=0,
+        created_at=new_project.created_at,
+        updated_at=new_project.updated_at,
+    )
 
 
 @router.get("/projects/{project_id}", status_code=status.HTTP_200_OK)
@@ -62,7 +99,7 @@ async def get_project(
     project = result.scalars().first()
     if not project:
         return {"detail": "Project not found"}
-    return project
+    return ProjectSchema.model_validate(project)
 
 
 @router.patch("/projects/{project_id}", status_code=status.HTTP_200_OK)
@@ -88,7 +125,7 @@ async def update_project(
     session.add(project)
     await session.commit()
     await session.refresh(project)
-    return project
+    return ProjectSchema.model_validate(project)
 
 
 @router.delete("/projects/{project_id}", status_code=status.HTTP_204_NO_CONTENT)
