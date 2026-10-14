@@ -100,3 +100,10 @@ class IssueSchemaForList(BaseModel):
     comment_count: int = 0
     created_at: datetime
     updated_at: datetime
+
+
+class IssueListResponse(BaseModel):
+    items: list[IssueSchemaForList] = []
+    total: int = 0
+    limit: int = 20
+    offset: int = 0
