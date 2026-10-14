@@ -20,12 +20,13 @@ class UserUpdate(schemas.BaseUserUpdate):
 
 # Project Schemas
 class ProjectSchema(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
     id: uuid.UUID
-    owner_id: uuid.UUID
     name: str
-    description: str
+    description: str | None = None
+    owner_id: uuid.UUID
+    my_role: Literal["owner", "maintainer", "reporter"]
+    member_count: int
+    open_issue_count: int = 0
     created_at: datetime
     updated_at: datetime
 
