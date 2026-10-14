@@ -10,9 +10,9 @@ from sqlalchemy import (
     UniqueConstraint,
     func,
 )
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from db import Base
+from db import Base, User
 
 
 class Project(Base):
@@ -79,6 +79,10 @@ class Issue(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
+
+    reporter: Mapped[User] = relationship(foreign_keys=[reporter_id])
+    assignee: Mapped[User | None] = relationship(foreign_keys=[assignee_id])
+    labels: Mapped[list["Label"]] = relationship(secondary="issue_labels")
 
 
 class Comment(Base):
