@@ -68,3 +68,35 @@ class CreateMembership(BaseModel):
 
 class UpdateMembership(BaseModel):
     role: Literal["maintainer", "reporter"] = "reporter"
+
+
+# Issues schemas
+class UserSummary(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    email: str
+
+
+class LabelSchema(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    name: str
+    color: str
+
+
+class IssueSchemaForList(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    project_id: uuid.UUID
+    title: str
+    status: Literal["open", "in_progress", "resolved", "closed"]
+    priority: Literal["low", "medium", "high", "urgent"]
+    reporter: UserSummary
+    assignee: UserSummary | None = None
+    labels: list[LabelSchema] = []
+    comment_count: int = 0
+    created_at: datetime
+    updated_at: datetime
