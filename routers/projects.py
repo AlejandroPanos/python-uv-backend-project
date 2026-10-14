@@ -3,7 +3,7 @@ import uuid
 from fastapi import APIRouter, Depends, Response
 from datetime import datetime
 from starlette import status
-from sqlalchemy.future import select
+from sqlalchemy import func, select
 
 from db import User, get_async_session, AsyncSession
 from schemas import (
@@ -19,23 +19,57 @@ from models import Project, ProjectMember
 router = APIRouter(prefix="/api/v1", tags=["projects"])
 
 
+def _member_projects_query(user_id: uuid.UUID):
+    member_count = (
+        select(func.count())
+        .select_from(ProjectMember)
+        .where(ProjectMember.project_id == Project.id)
+        .correlate(Project)
+        .scalar_subquery()
+    )
+    return (
+        select(Project, ProjectMember.role, member_count.label("member_count"))
+        .join(ProjectMember, ProjectMember.project_id == Project.id)
+        .where(ProjectMember.user_id == user_id)
+    )
+
+
+def _to_schema(project: Project, role: str, member_count: int) -> ProjectSchema:
+    return ProjectSchema(
+        id=project.id,
+        name=project.name,
+        description=project.description,
+        owner_id=project.owner_id,
+        my_role=role,
+        member_count=member_count,
+        created_at=project.created_at,
+        updated_at=project.updated_at,
+    )
+
+
 @router.get("/projects", status_code=status.HTTP_200_OK)
 async def list_projects(
     user: User = Depends(current_active_user),
     session: AsyncSession = Depends(get_async_session),
-    limit: int | None = 20,
-    offset: int | None = 0,
+    limit: int = 20,
+    offset: int = 0,
 ):
     """
-    Endpoint to list all projects for the authenticated user.
+    Endpoint to list all projects the authenticated user is a member of.
     """
     result = await session.execute(
-        select(Project).where(Project.owner_id == user.id).limit(limit).offset(offset)
+        _member_projects_query(user.id).limit(limit).offset(offset)
     )
-    user_projects = result.scalars().all()
+    items = [_to_schema(p, role, count) for p, role, count in result.all()]
+
+    total = await session.scalar(
+        select(func.count())
+        .select_from(ProjectMember)
+        .where(ProjectMember.user_id == user.id)
+    )
     return GetProjectsResponse(
-        items=[ProjectSchema.model_validate(p) for p in user_projects],
-        total=len(user_projects),
+        items=items,
+        total=total or 0,
         limit=limit,
         offset=offset,
     )
@@ -94,12 +128,13 @@ async def get_project(
     Endpoint to retrieve a specific project by its ID for the authenticated user.
     """
     result = await session.execute(
-        select(Project).where(Project.id == project_id, Project.owner_id == user.id)
+        _member_projects_query(user.id).where(Project.id == project_id)
     )
-    project = result.scalars().first()
-    if not project:
+    row = result.first()
+    if not row:
         return {"detail": "Project not found"}
-    return ProjectSchema.model_validate(project)
+    project, role, count = row
+    return _to_schema(project, role, count)
 
 
 @router.patch("/projects/{project_id}", status_code=status.HTTP_200_OK)
@@ -125,7 +160,12 @@ async def update_project(
     session.add(project)
     await session.commit()
     await session.refresh(project)
-    return ProjectSchema.model_validate(project)
+
+    result = await session.execute(
+        _member_projects_query(user.id).where(Project.id == project_id)
+    )
+    project, role, count = result.one()
+    return _to_schema(project, role, count)
 
 
 @router.delete("/projects/{project_id}", status_code=status.HTTP_204_NO_CONTENT)
