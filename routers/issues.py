@@ -10,7 +10,7 @@ from sqlalchemy.orm import joinedload, selectinload
 from db import User, get_async_session, AsyncSession
 from models import Comment, IssueLabel, ProjectMember, Issue
 from users import current_active_user
-from schemas import IssueSchemaForList
+from schemas import IssueSchemaForList, IssueListResponse
 
 router = APIRouter(prefix="/api/v1", tags=["issues"])
 
@@ -23,7 +23,7 @@ SORT_COLUMNS = {
 
 @router.get(
     "/projects/{project_id}/issues",
-    response_model=list[IssueSchemaForList],
+    response_model=IssueListResponse,
     status_code=status.HTTP_200_OK,
 )
 async def list_issues(
@@ -91,9 +91,16 @@ async def list_issues(
 
     rows = (await session.execute(stmt)).all()
 
-    return [
+    items = [
         IssueSchemaForList.model_validate(issue).model_copy(
             update={"comment_count": count}
         )
         for issue, count in rows
     ]
+
+    return IssueListResponse(
+        items=items,
+        total=len(items),
+        limit=limit,
+        offset=offset,
+    )
