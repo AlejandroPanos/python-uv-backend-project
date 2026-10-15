@@ -18,7 +18,9 @@ class UserUpdate(schemas.BaseUserUpdate):
     pass
 
 
+# ---------------------------
 # Project Schemas
+# ---------------------------
 class ProjectSchema(BaseModel):
     id: uuid.UUID
     name: str
@@ -60,7 +62,9 @@ class UpdateProject(BaseModel):
     description: str | None = None
 
 
+# ---------------------------
 # Membership Schemas
+# ---------------------------
 class CreateMembership(BaseModel):
     email: str
     role: Literal["maintainer", "reporter"] = "reporter"
@@ -70,7 +74,9 @@ class UpdateMembership(BaseModel):
     role: Literal["maintainer", "reporter"] = "reporter"
 
 
+# ---------------------------
 # Issues schemas
+# ---------------------------
 class UserSummary(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -107,3 +113,27 @@ class IssueListResponse(BaseModel):
     total: int = 0
     limit: int = 20
     offset: int = 0
+
+
+class PostIssueRequest(BaseModel):
+    title: str
+    body: str | None = None
+    priority: Literal["low", "medium", "high", "urgent"] = "medium"
+    assignee_id: uuid.UUID | None = None
+    label_ids: list[uuid.UUID] = []
+
+
+class PostIssueResponse(BaseModel):
+    id: uuid.UUID
+    project_id: uuid.UUID
+    title: str
+    body: str | None = None
+    status: Literal["open", "in_progress", "resolved", "closed"]
+    priority: Literal["low", "medium", "high", "urgent"]
+    reporter: UserSummary
+    assignee: UserSummary | None = None
+    labels: list[LabelSchema] = []
+    comment_count: int = 0
+    my_role: Literal["owner", "maintainer", "reporter"]
+    created_at: datetime
+    updated_at: datetime
