@@ -10,7 +10,13 @@ from sqlalchemy.orm import joinedload, selectinload
 from db import User, get_async_session, AsyncSession
 from models import Comment, IssueLabel, ProjectMember, Issue
 from users import current_active_user
-from schemas import IssueSchemaForList, IssueListResponse
+from schemas import (
+    IssueSchemaForList,
+    IssueListResponse,
+    PostIssueRequest,
+    PostIssueResponse,
+    UserSummary,
+)
 
 router = APIRouter(prefix="/api/v1", tags=["issues"])
 
@@ -45,7 +51,7 @@ async def list_issues(
     """
     Endpoint to list all issues for a specific project for the authenticated user.
     """
-    is_member = session.scalar(
+    is_member = await session.scalar(
         select(ProjectMember).where(
             ProjectMember.project_id == project_id, ProjectMember.user_id == user.id
         )
@@ -103,4 +109,81 @@ async def list_issues(
         total=len(items),
         limit=limit,
         offset=offset,
+    )
+
+
+@router.post(
+    "/projects/{project_id}/issues",
+    response_model=PostIssueResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_issue(
+    body: PostIssueRequest,
+    project_id: uuid.UUID,
+    user: User = Depends(current_active_user),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """
+    Endpoint to create a new issue for a specific project for the authenticated user.
+    """
+    is_member = await session.scalar(
+        select(ProjectMember).where(
+            ProjectMember.project_id == project_id, ProjectMember.user_id == user.id
+        )
+    )
+
+    if not is_member:
+        raise HTTPException(status_code=404, detail="Project not found.")
+
+    member_role = await session.scalar(
+        select(ProjectMember.role).where(
+            ProjectMember.project_id == project_id, ProjectMember.user_id == user.id
+        )
+    )
+
+    if not member_role or member_role not in ["maintainer", "owner"]:
+        raise HTTPException(
+            status_code=401,
+            detail="Only the project owner or maintainers can add issues.",
+        )
+
+    assignee = None
+    if body.assignee_id:
+        assignee_user = await session.scalar(
+            select(User)
+            .join(ProjectMember, ProjectMember.user_id == User.id)
+            .where(ProjectMember.project_id == project_id, User.id == body.assignee_id)
+        )
+        if not assignee_user:
+            raise HTTPException(
+                status_code=400,
+                detail="Assignee must be a member of the project.",
+            )
+        assignee = UserSummary.model_validate(assignee_user)
+
+    issue = Issue(
+        title=body.title,
+        body=body.body,
+        status="open",
+        priority=body.priority,
+        reporter_id=user.id,
+        assignee_id=body.assignee_id,
+        project_id=project_id,
+    )
+    session.add(issue)
+    await session.commit()
+    await session.refresh(issue)
+
+    return PostIssueResponse(
+        id=issue.id,
+        project_id=issue.project_id,
+        title=issue.title,
+        body=issue.body,
+        status=issue.status,
+        priority=issue.priority,
+        reporter=UserSummary(id=user.id, email=user.email),
+        assignee=assignee,
+        my_role=member_role,
+        created_at=issue.created_at,
+        updated_at=issue.updated_at,
     )
