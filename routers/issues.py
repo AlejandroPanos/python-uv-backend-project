@@ -189,6 +189,7 @@ async def create_issue(
     )
 
 
+# Create endpoint to retreive a specific issue by its ID
 @router.get("/issues/{issue_id}", status_code=status.HTTP_200_OK)
 async def get_issue_by_id(
     issue_id: uuid.UUID,
