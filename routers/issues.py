@@ -187,3 +187,12 @@ async def create_issue(
         created_at=issue.created_at,
         updated_at=issue.updated_at,
     )
+
+
+@router.get("/issues/{issue_id}", status_code=status.HTTP_200_OK)
+async def get_issue_by_id(
+    issue_id: uuid.UUID,
+    _: User = Depends(current_active_user),
+    session: AsyncSession = Depends(get_async_session),
+):
+    pass
