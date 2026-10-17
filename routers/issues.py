@@ -193,7 +193,22 @@ async def create_issue(
 @router.get("/issues/{issue_id}", status_code=status.HTTP_200_OK)
 async def get_issue_by_id(
     issue_id: uuid.UUID,
-    _: User = Depends(current_active_user),
+    project_id: uuid.UUID,
+    user: User = Depends(current_active_user),
     session: AsyncSession = Depends(get_async_session),
 ):
-    pass
+    """
+    Endpoint to get an issue by its ID when the user is a member of the project.
+    """
+    is_member = await session.scalar(
+        select(ProjectMember).where(
+            ProjectMember.project_id == project_id, ProjectMember.user_id == user.id
+        )
+    )
+
+    if not is_member:
+        raise HTTPException(status_code=404, detail="Project not found.")
+
+    issue = await session.scalar(select(Issue).where(Issue.id == issue_id))
+
+    return issue
