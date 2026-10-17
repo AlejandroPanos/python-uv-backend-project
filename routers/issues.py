@@ -13,9 +13,11 @@ from users import current_active_user
 from schemas import (
     IssueSchemaForList,
     IssueListResponse,
+    LabelSchema,
     PostIssueRequest,
     PostIssueResponse,
     UserSummary,
+    GetIssueResponse,
 )
 
 router = APIRouter(prefix="/api/v1", tags=["issues"])
@@ -209,6 +211,49 @@ async def get_issue_by_id(
     if not is_member:
         raise HTTPException(status_code=404, detail="Project not found.")
 
-    issue = await session.scalar(select(Issue).where(Issue.id == issue_id))
+    member_role = await session.scalar(
+        select(ProjectMember.role).where(
+            ProjectMember.project_id == project_id, ProjectMember.user_id == user.id
+        )
+    )
 
-    return issue
+    if not member_role or member_role not in ["maintainer", "owner"]:
+        raise HTTPException(
+            status_code=401,
+            detail="Only the project owner or maintainers can add issues.",
+        )
+
+    stmt = (
+        select(Issue)
+        .options(
+            joinedload(Issue.reporter),
+            joinedload(Issue.assignee),
+            selectinload(Issue.labels),
+        )
+        .where(Issue.id == issue_id)
+    )
+    issue = await session.scalar(stmt)
+
+    issue_response = GetIssueResponse(
+        id=issue.id,
+        project_id=issue.project_id,
+        title=issue.title,
+        body=issue.body,
+        status=issue.status,
+        priority=issue.priority,
+        reporter=UserSummary(id=user.id, email=user.email),
+        assignee=(
+            UserSummary(id=issue.assignee.id, email=issue.assignee.email)
+            if issue.assignee
+            else None
+        ),
+        labels=[
+            LabelSchema(id=label.id, name=label.name, color=label.color)
+            for label in issue.labels
+        ],
+        my_role=member_role,
+        created_at=issue.created_at,
+        updated_at=issue.updated_at,
+    )
+
+    return issue_response
