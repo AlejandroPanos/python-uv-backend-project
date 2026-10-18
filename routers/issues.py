@@ -21,6 +21,7 @@ from schemas import (
     PatchIssueRequest,
     PatchIssueResponse,
 )
+from helpers.helpers import check_project_membership
 
 router = APIRouter(prefix="/api/v1", tags=["issues"])
 
@@ -29,17 +30,6 @@ SORT_COLUMNS = {
     "updated_at": Issue.updated_at,
     "priority": Issue.priority,
 }
-
-
-async def check_project_membership(
-    project_id: uuid.UUID, user: User, session: AsyncSession
-) -> bool:
-    is_member = await session.scalar(
-        select(ProjectMember).where(
-            ProjectMember.project_id == project_id, ProjectMember.user_id == user.id
-        )
-    )
-    return bool(is_member)
 
 
 @router.get(
