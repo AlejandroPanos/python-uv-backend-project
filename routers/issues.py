@@ -21,7 +21,7 @@ from schemas import (
     PatchIssueRequest,
     PatchIssueResponse,
 )
-from helpers.helpers import check_project_membership
+from helpers.helpers import check_project_membership, get_project_member_role
 
 router = APIRouter(prefix="/api/v1", tags=["issues"])
 
@@ -132,11 +132,7 @@ async def create_issue(
     if not is_member:
         raise HTTPException(status_code=404, detail="Project not found.")
 
-    member_role = await session.scalar(
-        select(ProjectMember.role).where(
-            ProjectMember.project_id == project_id, ProjectMember.user_id == user.id
-        )
-    )
+    member_role = await get_project_member_role(project_id, user, session)
 
     if not member_role or member_role not in ["maintainer", "owner"]:
         raise HTTPException(
@@ -201,11 +197,7 @@ async def get_issue_by_id(
     if not is_member:
         raise HTTPException(status_code=404, detail="Project not found.")
 
-    member_role = await session.scalar(
-        select(ProjectMember.role).where(
-            ProjectMember.project_id == project_id, ProjectMember.user_id == user.id
-        )
-    )
+    member_role = await get_project_member_role(project_id, user, session)
 
     if not member_role or member_role not in ["maintainer", "owner"]:
         raise HTTPException(
@@ -266,11 +258,7 @@ async def patch_issue(
     if not is_member:
         raise HTTPException(status_code=404, detail="Project not found.")
 
-    member_role = await session.scalar(
-        select(ProjectMember.role).where(
-            ProjectMember.project_id == project_id, ProjectMember.user_id == user.id
-        )
-    )
+    member_role = await get_project_member_role(project_id, user, session)
 
     if not member_role or member_role not in ["maintainer", "owner"]:
         raise HTTPException(
@@ -348,11 +336,7 @@ async def delete_issue(
     if not is_member:
         raise HTTPException(status_code=404, detail="Project not found.")
 
-    member_role = await session.scalar(
-        select(ProjectMember.role).where(
-            ProjectMember.project_id == project_id, ProjectMember.user_id == user.id
-        )
-    )
+    member_role = await get_project_member_role(project_id, user, session)
 
     if not member_role or member_role not in ["maintainer", "owner"]:
         raise HTTPException(
