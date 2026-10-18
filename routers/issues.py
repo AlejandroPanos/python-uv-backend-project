@@ -18,6 +18,8 @@ from schemas import (
     PostIssueResponse,
     UserSummary,
     GetIssueResponse,
+    PatchIssueRequest,
+    PatchIssueResponse,
 )
 
 router = APIRouter(prefix="/api/v1", tags=["issues"])
@@ -191,7 +193,6 @@ async def create_issue(
     )
 
 
-# Create endpoint to retreive a specific issue by its ID
 @router.get("/issues/{issue_id}", status_code=status.HTTP_200_OK)
 async def get_issue_by_id(
     issue_id: uuid.UUID,
@@ -257,3 +258,90 @@ async def get_issue_by_id(
     )
 
     return issue_response
+
+
+@router.patch("/issues/{issue_id}", status_code=status.HTTP_200_OK)
+async def patch_issue(
+    issue_id: uuid.UUID,
+    project_id: uuid.UUID,
+    patch_request: PatchIssueRequest,
+    user: User = Depends(current_active_user),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """
+    Endpoint to update an issue by its ID when the user is a member of the project.
+    Only the project owner or maintainers can update issues.
+    """
+    is_member = await session.scalar(
+        select(ProjectMember).where(
+            ProjectMember.project_id == project_id, ProjectMember.user_id == user.id
+        )
+    )
+
+    if not is_member:
+        raise HTTPException(status_code=404, detail="Project not found.")
+
+    member_role = await session.scalar(
+        select(ProjectMember.role).where(
+            ProjectMember.project_id == project_id, ProjectMember.user_id == user.id
+        )
+    )
+
+    if not member_role or member_role not in ["maintainer", "owner"]:
+        raise HTTPException(
+            status_code=401,
+            detail="Only the project owner or maintainers can add issues.",
+        )
+
+    stmt = (
+        select(Issue)
+        .options(
+            joinedload(Issue.reporter),
+            joinedload(Issue.assignee),
+            selectinload(Issue.labels),
+        )
+        .where(Issue.id == issue_id)
+    )
+    issue = await session.scalar(stmt)
+
+    if not issue:
+        raise HTTPException(status_code=404, detail="Issue not found.")
+
+    if patch_request.title is not None:
+        issue.title = patch_request.title
+    if patch_request.body is not None:
+        issue.body = patch_request.body
+    if patch_request.status is not None:
+        issue.status = patch_request.status
+    if patch_request.priority is not None:
+        issue.priority = patch_request.priority
+    if patch_request.assignee_id is not None:
+        issue.assignee_id = patch_request.assignee_id
+
+    session.add(issue)
+    await session.commit()
+    session.refresh(issue)
+
+    updated_issue = PatchIssueResponse(
+        id=issue.id,
+        project_id=issue.project_id,
+        title=issue.title,
+        body=issue.body,
+        status=issue.status,
+        priority=issue.priority,
+        reporter=UserSummary(id=issue.reporter.id, email=issue.reporter.email),
+        assignee=(
+            UserSummary(id=issue.assignee.id, email=issue.assignee.email)
+            if issue.assignee
+            else None
+        ),
+        labels=[
+            LabelSchema(id=label.id, name=label.name, color=label.color)
+            for label in issue.labels
+        ],
+        my_role=member_role,
+        created_at=issue.created_at,
+        updated_at=datetime.utcnow(),
+    )
+
+    return updated_issue
