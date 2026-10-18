@@ -31,6 +31,17 @@ SORT_COLUMNS = {
 }
 
 
+async def check_project_membership(
+    project_id: uuid.UUID, user: User, session: AsyncSession
+) -> bool:
+    is_member = await session.scalar(
+        select(ProjectMember).where(
+            ProjectMember.project_id == project_id, ProjectMember.user_id == user.id
+        )
+    )
+    return bool(is_member)
+
+
 @router.get(
     "/projects/{project_id}/issues",
     response_model=IssueListResponse,
@@ -55,11 +66,7 @@ async def list_issues(
     """
     Endpoint to list all issues for a specific project for the authenticated user.
     """
-    is_member = await session.scalar(
-        select(ProjectMember).where(
-            ProjectMember.project_id == project_id, ProjectMember.user_id == user.id
-        )
-    )
+    is_member = await check_project_membership(project_id, user, session)
 
     if not is_member:
         raise HTTPException(status_code=404, detail="Project not found.")
@@ -130,11 +137,7 @@ async def create_issue(
     """
     Endpoint to create a new issue for a specific project for the authenticated user.
     """
-    is_member = await session.scalar(
-        select(ProjectMember).where(
-            ProjectMember.project_id == project_id, ProjectMember.user_id == user.id
-        )
-    )
+    is_member = await check_project_membership(project_id, user, session)
 
     if not is_member:
         raise HTTPException(status_code=404, detail="Project not found.")
@@ -203,11 +206,7 @@ async def get_issue_by_id(
     """
     Endpoint to get an issue by its ID when the user is a member of the project.
     """
-    is_member = await session.scalar(
-        select(ProjectMember).where(
-            ProjectMember.project_id == project_id, ProjectMember.user_id == user.id
-        )
-    )
+    is_member = await check_project_membership(project_id, user, session)
 
     if not is_member:
         raise HTTPException(status_code=404, detail="Project not found.")
@@ -221,7 +220,7 @@ async def get_issue_by_id(
     if not member_role or member_role not in ["maintainer", "owner"]:
         raise HTTPException(
             status_code=401,
-            detail="Only the project owner or maintainers can add issues.",
+            detail="Only the project owner or maintainers can check issues.",
         )
 
     stmt = (
@@ -272,11 +271,7 @@ async def patch_issue(
     Endpoint to update an issue by its ID when the user is a member of the project.
     Only the project owner or maintainers can update issues.
     """
-    is_member = await session.scalar(
-        select(ProjectMember).where(
-            ProjectMember.project_id == project_id, ProjectMember.user_id == user.id
-        )
-    )
+    is_member = await check_project_membership(project_id, user, session)
 
     if not is_member:
         raise HTTPException(status_code=404, detail="Project not found.")
@@ -290,7 +285,7 @@ async def patch_issue(
     if not member_role or member_role not in ["maintainer", "owner"]:
         raise HTTPException(
             status_code=401,
-            detail="Only the project owner or maintainers can add issues.",
+            detail="Only the project owner or maintainers can update issues.",
         )
 
     stmt = (
@@ -358,11 +353,7 @@ async def delete_issue(
     Endpoint to delete an issue by its ID when the user is a member of the project.
     Only the project owner or maintainers can delete issues.
     """
-    is_member = await session.scalar(
-        select(ProjectMember).where(
-            ProjectMember.project_id == project_id, ProjectMember.user_id == user.id
-        )
-    )
+    is_member = await check_project_membership(project_id, user, session)
 
     if not is_member:
         raise HTTPException(status_code=404, detail="Project not found.")
