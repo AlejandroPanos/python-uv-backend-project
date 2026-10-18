@@ -345,3 +345,47 @@ async def patch_issue(
     )
 
     return updated_issue
+
+
+@router.delete("/issue/{issue_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_issue(
+    issue_id: uuid.UUID,
+    project_id: uuid.UUID,
+    session: AsyncSession = Depends(get_async_session),
+    user: User = Depends(current_active_user),
+):
+    """
+    Endpoint to delete an issue by its ID when the user is a member of the project.
+    Only the project owner or maintainers can delete issues.
+    """
+    is_member = await session.scalar(
+        select(ProjectMember).where(
+            ProjectMember.project_id == project_id, ProjectMember.user_id == user.id
+        )
+    )
+
+    if not is_member:
+        raise HTTPException(status_code=404, detail="Project not found.")
+
+    member_role = await session.scalar(
+        select(ProjectMember.role).where(
+            ProjectMember.project_id == project_id, ProjectMember.user_id == user.id
+        )
+    )
+
+    if not member_role or member_role not in ["maintainer", "owner"]:
+        raise HTTPException(
+            status_code=401,
+            detail="Only the project owner or maintainers can delete issues.",
+        )
+
+    stmt = select(Issue).where(Issue.id == issue_id)
+    issue = await session.scalar(stmt)
+
+    if not issue:
+        raise HTTPException(status_code=404, detail="Issue not found.")
+
+    await session.delete(issue)
+    await session.commit()
+
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
