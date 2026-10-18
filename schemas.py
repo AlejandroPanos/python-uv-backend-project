@@ -153,3 +153,28 @@ class GetIssueResponse(BaseModel):
     my_role: Literal["owner", "maintainer", "reporter"]
     created_at: datetime
     updated_at: datetime
+
+
+class PatchIssueRequest(BaseModel):
+    title: str | None = None
+    body: str | None = None
+    status: Literal["open", "in_progress", "resolved", "closed"] | None = None
+    priority: Literal["low", "medium", "high", "urgent"] | None = None
+    assignee_id: uuid.UUID | None = None
+    label_ids: list[uuid.UUID] | None = None
+
+
+class PatchIssueResponse(BaseModel):
+    id: uuid.UUID
+    project_id: uuid.UUID
+    title: str
+    body: str | None = None
+    status: Literal["open", "in_progress", "resolved", "closed"]
+    priority: Literal["low", "medium", "high", "urgent"]
+    reporter: UserSummary
+    assignee: UserSummary | None = None
+    labels: list[LabelSchema] = []
+    comment_count: int = 0
+    my_role: Literal["owner", "maintainer", "reporter"]
+    created_at: datetime
+    updated_at: datetime
