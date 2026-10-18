@@ -103,6 +103,8 @@ class Comment(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
+    author: Mapped[User] = relationship(foreign_keys=[author_id])
+
 
 class Label(Base):
     __tablename__ = "labels"
