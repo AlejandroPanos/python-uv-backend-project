@@ -178,3 +178,22 @@ class PatchIssueResponse(BaseModel):
     my_role: Literal["owner", "maintainer", "reporter"]
     created_at: datetime
     updated_at: datetime
+
+
+# ---------------------------
+# Comment schemas
+# ---------------------------
+class CommentSchemaForList(BaseModel):
+    id: uuid.UUID
+    issue_id: uuid.UUID
+    body: str
+    author: UserSummary
+    created_at: datetime
+    updated_at: datetime
+
+
+class GetIssuesCommentsResponse(BaseModel):
+    items: list[CommentSchemaForList] = []
+    total: int = 0
+    limit: int = 20
+    offset: int = 0
