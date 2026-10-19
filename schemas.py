@@ -1,8 +1,9 @@
 import uuid
 from datetime import datetime
 from fastapi_users import schemas
-from pydantic import ConfigDict
-from pydantic import BaseModel
+from datetime import datetime
+from pydantic import field_validator, ConfigDict
+from pydantic import BaseModel, Field
 from typing import Literal
 
 
@@ -197,3 +198,18 @@ class GetIssuesCommentsResponse(BaseModel):
     total: int = 0
     limit: int = 20
     offset: int = 0
+
+
+class PostCommentRequest(BaseModel):
+    body: str
+
+    @field_validator("body")
+    def body_length(cls, v: str) -> str:
+        if not (1 <= len(v) <= 1000):
+            raise ValueError("Body must be between 1 and 1000 characters")
+        if v is None or v is " ":
+            raise ValueError("Body cannot be empty or just a space")
+        return v
+
+    class Config:
+        orm_mode = True
