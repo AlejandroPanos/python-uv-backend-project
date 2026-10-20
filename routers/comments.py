@@ -88,11 +88,14 @@ async def create_comment_for_issue(
         issue_id=issue_id,
         body=comment.body,
         author_id=user.id,
-        created_at=datetime.utcnow(),
-        updated_at=datetime.utcnow(),
     )
     session.add(new_comment)
     await session.commit()
-    await session.refresh(new_comment)
 
-    return CommentSchemaForList.model_validate(new_comment)
+    # Reload with the author eagerly loaded so serialization doesn't lazy-load
+    saved = await session.scalar(
+        select(Comment)
+        .options(joinedload(Comment.author))
+        .where(Comment.id == new_comment.id)
+    )
+    return CommentSchemaForList.model_validate(saved)
