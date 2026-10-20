@@ -212,3 +212,15 @@ class PostCommentRequest(BaseModel):
         if not v:
             raise ValueError("Body cannot be empty or just whitespace")
         return v
+
+
+class PatchCommentRequest(BaseModel):
+    body: str = Field(min_length=1, max_length=1000)
+
+    @field_validator("body")
+    @classmethod
+    def body_not_blank(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("Body cannot be empty or just whitespace")
+        return v
