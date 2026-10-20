@@ -185,6 +185,8 @@ class PatchIssueResponse(BaseModel):
 # Comment schemas
 # ---------------------------
 class CommentSchemaForList(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: uuid.UUID
     issue_id: uuid.UUID
     body: str
@@ -201,15 +203,12 @@ class GetIssuesCommentsResponse(BaseModel):
 
 
 class PostCommentRequest(BaseModel):
-    body: str
+    body: str = Field(min_length=1, max_length=1000)
 
     @field_validator("body")
-    def body_length(cls, v: str) -> str:
-        if not (1 <= len(v) <= 1000):
-            raise ValueError("Body must be between 1 and 1000 characters")
-        if v is None or v is " ":
-            raise ValueError("Body cannot be empty or just a space")
+    @classmethod
+    def body_not_blank(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("Body cannot be empty or just whitespace")
         return v
-
-    class Config:
-        orm_mode = True
