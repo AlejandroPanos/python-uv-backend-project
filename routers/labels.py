@@ -11,3 +11,16 @@ from helpers.helpers import check_project_membership
 from users import current_active_user
 
 router = APIRouter(prefix="/api/v1", tags=["labels"])
+
+
+@router.get(
+    "/projects/{project_id}/labels",
+    response_model=list[str],
+    status_code=status.HTTP_200_OK,
+)
+async def get_labels_for_project(
+    project_id: uuid.UUID,
+    user: User = Depends(current_active_user),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """List labels for a project. Any project member can read them."""
