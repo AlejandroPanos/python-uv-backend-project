@@ -1,4 +1,5 @@
 import uuid
+import re
 from datetime import datetime
 from fastapi_users import schemas
 from datetime import datetime
@@ -223,4 +224,65 @@ class PatchCommentRequest(BaseModel):
         v = v.strip()
         if not v:
             raise ValueError("Body cannot be empty or just whitespace")
+        return v
+
+
+# ---------------------------
+# Label schemas
+# ---------------------------
+class GetLabelListSchema(BaseModel):
+    id: uuid.UUID
+    name: str
+    color: str
+
+
+class PostLabelSchema(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+    color: str = Field(min_length=1, max_length=7)
+
+    @field_validator("name")
+    @classmethod
+    def name_not_blank(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("Name cannot be empty or just whitespace")
+        return v
+
+    @field_validator("color")
+    @classmethod
+    def color_not_blank(cls, v: str) -> str:
+        color_pattern = r"^#[0-9a-fA-F]{6}$"
+        v = v.strip()
+        if not v:
+            raise ValueError("Color cannot be empty or just whitespace")
+        if not re.match(color_pattern, v):
+            raise ValueError("Color must be a valid hex code like '#FFFFFF'")
+        return v
+
+
+class PatchLabelSchema(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=100)
+    color: str | None = Field(default=None, min_length=1, max_length=7)
+
+    @field_validator("name")
+    @classmethod
+    def name_not_blank(cls, v: str) -> str:
+        if v is None:
+            return v
+        v = v.strip()
+        if not v:
+            raise ValueError("Name cannot be empty or just whitespace")
+        return v
+
+    @field_validator("color")
+    @classmethod
+    def color_not_blank(cls, v: str) -> str:
+        if v is None:
+            return v
+        color_pattern = r"^#[0-9a-fA-F]{6}$"
+        v = v.strip()
+        if not v:
+            raise ValueError("Color cannot be empty or just whitespace")
+        if not re.match(color_pattern, v):
+            raise ValueError("Color must be a valid hex code like '#FFFFFF'")
         return v
