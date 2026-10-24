@@ -1,13 +1,12 @@
 import uuid
 
 from aiosqlite import IntegrityError
-from fastapi import APIRouter, Depends, Query, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from starlette import status
-from sqlalchemy import func, select
-from sqlalchemy.orm import joinedload
+from sqlalchemy import select
 
 from db import User, get_async_session, AsyncSession
-from models import Comment, Label
+from models import Label
 from helpers.helpers import check_project_membership
 from users import current_active_user
 from schemas import PostLabelSchema, GetLabelListSchema, PatchLabelSchema
