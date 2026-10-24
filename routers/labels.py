@@ -1,5 +1,6 @@
 import uuid
 
+from aiosqlite import IntegrityError
 from fastapi import APIRouter, Depends, Query, HTTPException
 from starlette import status
 from sqlalchemy import func, select
@@ -37,29 +38,30 @@ async def get_labels_for_project(
     ]
 
 
-@router.post("/projects/{project_id}/labels")
+@router.post(
+    "/projects/{project_id}/labels",
+    response_model=GetLabelListSchema,
+    status_code=status.HTTP_201_CREATED,
+)
 async def create_label_for_project(
     project_id: uuid.UUID,
     label: PostLabelSchema,
     user: User = Depends(current_active_user),
     session: AsyncSession = Depends(get_async_session),
 ):
-    """Create a label for a project. Any project member can create labels."""
     is_member = await check_project_membership(project_id, user, session)
     if not is_member:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Project not found.")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Not found.")
 
-    # Check if the label already exists
-    stmt = select(Label.id).where(
-        Label.project_id == project_id, Label.name == label.name
-    )
-    existing_label = await session.scalar(stmt)
-    if existing_label:
+    new_label = Label(project_id=project_id, name=label.name, color=label.color)
+    session.add(new_label)
+    try:
+        await session.commit()
+    except IntegrityError:
+        await session.rollback()
         raise HTTPException(status.HTTP_409_CONFLICT, "Label already exists.")
-
-    session.add(Label(project_id=project_id, name=label.name, color=label.color))
-    await session.commit()
-    return label
+    await session.refresh(new_label)
+    return new_label  # needs from_attributes=True on GetLabelListSchema
 
 
 @router.patch(
@@ -73,23 +75,22 @@ async def update_label(
     user: User = Depends(current_active_user),
     session: AsyncSession = Depends(get_async_session),
 ):
-    """Update a label. Any project member can update labels."""
-    stmt = select(Label).where(Label.id == label_id)
-    existing_label = await session.scalar(stmt)
-    if not existing_label:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Label not found.")
-
-    is_member = await check_project_membership(existing_label.project_id, user, session)
-    if not is_member:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Project not found.")
+    existing_label = await session.scalar(select(Label).where(Label.id == label_id))
+    if not existing_label or not await check_project_membership(
+        existing_label.project_id, user, session
+    ):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Not found.")
 
     if label.name is not None:
         existing_label.name = label.name
     if label.color is not None:
         existing_label.color = label.color
 
-    session.add(existing_label)
-    await session.commit()
+    try:
+        await session.commit()
+    except IntegrityError:
+        await session.rollback()
+        raise HTTPException(status.HTTP_409_CONFLICT, "Label already exists.")
     await session.refresh(existing_label)
     return GetLabelListSchema(
         id=existing_label.id, name=existing_label.name, color=existing_label.color
