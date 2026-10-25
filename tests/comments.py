@@ -2,19 +2,14 @@ import asyncio
 import uuid
 from datetime import datetime, timezone
 
+from fastapi import FastAPI
+from httpx import ASGITransport, AsyncClient
 import pytest
-from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from db import Base, User
 from models import Comment, Issue, Project, ProjectMember
-from routers.comments import (
-    create_comment_for_issue,
-    delete_comment,
-    get_comments_for_issue,
-    update_comment,
-)
-from schemas import PatchCommentRequest, PostCommentRequest
+from routers import comments as comments_router
 
 
 @pytest.fixture
@@ -74,15 +69,38 @@ def run_with_database(tmp_path):
                     session.add_all([issue, issue_in_other_project])
                     await session.commit()
 
-                    return await test(
-                        session,
-                        author,
-                        member,
-                        non_member,
-                        project,
-                        issue,
-                        issue_in_other_project,
+                    app = FastAPI()
+                    app.include_router(comments_router.router)
+                    current_user = [author]
+
+                    async def override_user():
+                        return current_user[0]
+
+                    async def override_session():
+                        yield session
+
+                    app.dependency_overrides[comments_router.current_active_user] = (
+                        override_user
                     )
+                    app.dependency_overrides[comments_router.get_async_session] = (
+                        override_session
+                    )
+
+                    async with AsyncClient(
+                        transport=ASGITransport(app=app),
+                        base_url="http://test",
+                    ) as client:
+                        return await test(
+                            client,
+                            current_user,
+                            session,
+                            author,
+                            member,
+                            non_member,
+                            project,
+                            issue,
+                            issue_in_other_project,
+                        )
             finally:
                 await engine.dispose()
 
@@ -92,7 +110,17 @@ def run_with_database(tmp_path):
 
 
 def test_list_comments_is_ordered_and_paginated(run_with_database):
-    async def exercise(session, author, _, __, project, issue, ___):
+    async def exercise(
+        client,
+        current_user,
+        session,
+        author,
+        member,
+        non_member,
+        project,
+        issue,
+        other_issue,
+    ):
         comments = [
             Comment(
                 id=uuid.UUID(int=comment_id),
@@ -106,14 +134,17 @@ def test_list_comments_is_ordered_and_paginated(run_with_database):
         session.add_all(comments)
         await session.commit()
 
-        response = await get_comments_for_issue(
-            issue.id, project.id, author, session, limit=2, offset=1
+        response = await client.get(
+            f"/api/v1/issues/{issue.id}/comments",
+            params={"project_id": str(project.id), "limit": 2, "offset": 1},
         )
 
-        assert response.total == 3
-        assert response.limit == 2
-        assert response.offset == 1
-        assert [comment.body for comment in response.items] == [
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["total"] == 3
+        assert payload["limit"] == 2
+        assert payload["offset"] == 1
+        assert [comment["body"] for comment in payload["items"]] == [
             "Comment 2",
             "Comment 3",
         ]
@@ -122,45 +153,76 @@ def test_list_comments_is_ordered_and_paginated(run_with_database):
 
 
 def test_list_comments_requires_project_membership(run_with_database):
-    async def exercise(session, _, __, non_member, project, issue, ___):
-        with pytest.raises(HTTPException) as error:
-            await get_comments_for_issue(issue.id, project.id, non_member, session)
+    async def exercise(
+        client,
+        current_user,
+        session,
+        author,
+        member,
+        non_member,
+        project,
+        issue,
+        other_issue,
+    ):
+        current_user[0] = non_member
+        response = await client.get(
+            f"/api/v1/issues/{issue.id}/comments",
+            params={"project_id": str(project.id)},
+        )
 
-        assert error.value.status_code == 404
+        assert response.status_code == 404
+        assert response.json()["detail"] == "Project not found."
 
     run_with_database(exercise)
 
 
 def test_create_comment_persists_for_issue_in_project(run_with_database):
-    async def exercise(session, author, _, __, project, issue, other_issue):
-        response = await create_comment_for_issue(
-            issue.id,
-            project.id,
-            PostCommentRequest(body="  A useful note  "),
-            author,
-            session,
+    async def exercise(
+        client,
+        current_user,
+        session,
+        author,
+        member,
+        non_member,
+        project,
+        issue,
+        other_issue,
+    ):
+        response = await client.post(
+            f"/api/v1/issues/{issue.id}/comments",
+            params={"project_id": str(project.id)},
+            json={"body": "  A useful note  "},
         )
 
-        assert response.issue_id == issue.id
-        assert response.body == "A useful note"
-        assert response.author.id == author.id
-        assert await session.get(Comment, response.id) is not None
+        assert response.status_code == 201
+        payload = response.json()
+        assert payload["issue_id"] == str(issue.id)
+        assert payload["body"] == "A useful note"
+        assert payload["author"]["id"] == str(author.id)
+        assert await session.get(Comment, uuid.UUID(payload["id"])) is not None
 
-        with pytest.raises(HTTPException) as error:
-            await create_comment_for_issue(
-                other_issue.id,
-                project.id,
-                PostCommentRequest(body="Wrong project"),
-                author,
-                session,
-            )
-        assert error.value.status_code == 404
+        wrong_project = await client.post(
+            f"/api/v1/issues/{other_issue.id}/comments",
+            params={"project_id": str(project.id)},
+            json={"body": "Wrong project"},
+        )
+        assert wrong_project.status_code == 404
 
     run_with_database(exercise)
 
 
 def test_update_comment_requires_author_and_existing_comment(run_with_database):
-    async def exercise(session, author, member, _, project, issue, ___):
+    async def exercise(
+        client,
+        current_user,
+        session,
+        author,
+        member,
+        non_member,
+        project,
+        issue,
+        other_issue,
+    ):
         comment = Comment(
             issue_id=issue.id,
             author_id=author.id,
@@ -169,40 +231,45 @@ def test_update_comment_requires_author_and_existing_comment(run_with_database):
         session.add(comment)
         await session.commit()
 
-        response = await update_comment(
-            project.id,
-            comment.id,
-            PatchCommentRequest(body="  Updated  "),
-            author,
-            session,
+        response = await client.patch(
+            f"/api/v1/comments/{comment.id}",
+            params={"project_id": str(project.id)},
+            json={"body": "  Updated  "},
         )
-        assert response.body == "Updated"
+        assert response.status_code == 200
+        assert response.json()["body"] == "Updated"
 
-        with pytest.raises(HTTPException) as forbidden:
-            await update_comment(
-                project.id,
-                comment.id,
-                PatchCommentRequest(body="Not allowed"),
-                member,
-                session,
-            )
-        assert forbidden.value.status_code == 403
+        current_user[0] = member
+        forbidden = await client.patch(
+            f"/api/v1/comments/{comment.id}",
+            params={"project_id": str(project.id)},
+            json={"body": "Not allowed"},
+        )
+        assert forbidden.status_code == 403
 
-        with pytest.raises(HTTPException) as missing:
-            await update_comment(
-                project.id,
-                uuid.uuid4(),
-                PatchCommentRequest(body="Missing"),
-                author,
-                session,
-            )
-        assert missing.value.status_code == 404
+        current_user[0] = author
+        missing = await client.patch(
+            f"/api/v1/comments/{uuid.uuid4()}",
+            params={"project_id": str(project.id)},
+            json={"body": "Missing"},
+        )
+        assert missing.status_code == 404
 
     run_with_database(exercise)
 
 
 def test_delete_comment_requires_author_and_removes_comment(run_with_database):
-    async def exercise(session, author, member, _, project, issue, ___):
+    async def exercise(
+        client,
+        current_user,
+        session,
+        author,
+        member,
+        non_member,
+        project,
+        issue,
+        other_issue,
+    ):
         comment = Comment(
             issue_id=issue.id,
             author_id=author.id,
@@ -211,15 +278,25 @@ def test_delete_comment_requires_author_and_removes_comment(run_with_database):
         session.add(comment)
         await session.commit()
 
-        with pytest.raises(HTTPException) as forbidden:
-            await delete_comment(project.id, comment.id, member, session)
-        assert forbidden.value.status_code == 403
+        current_user[0] = member
+        forbidden = await client.delete(
+            f"/api/v1/comments/{comment.id}",
+            params={"project_id": str(project.id)},
+        )
+        assert forbidden.status_code == 403
 
-        await delete_comment(project.id, comment.id, author, session)
+        current_user[0] = author
+        deleted = await client.delete(
+            f"/api/v1/comments/{comment.id}",
+            params={"project_id": str(project.id)},
+        )
+        assert deleted.status_code == 204
         assert await session.get(Comment, comment.id) is None
 
-        with pytest.raises(HTTPException) as missing:
-            await delete_comment(project.id, comment.id, author, session)
-        assert missing.value.status_code == 404
+        missing = await client.delete(
+            f"/api/v1/comments/{comment.id}",
+            params={"project_id": str(project.id)},
+        )
+        assert missing.status_code == 404
 
     run_with_database(exercise)
