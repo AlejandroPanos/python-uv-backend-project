@@ -1,9 +1,9 @@
 import uuid
 
-from aiosqlite import IntegrityError
 from fastapi import APIRouter, Depends, HTTPException
 from starlette import status
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 
 from db import User, get_async_session, AsyncSession
 from models import Label
