@@ -12,6 +12,7 @@ from db import User, get_async_session, AsyncSession
 from schemas import CreateMembership, UpdateMembership
 from users import current_active_user
 from models import Project, ProjectMember
+from helpers.helpers import check_project_membership
 
 router = APIRouter(prefix="/api/v1", tags=["memberships"])
 
@@ -25,6 +26,11 @@ async def list_project_members(
     """
     Endpoint to list all members of a specific project for the authenticated user.
     """
+    if not await check_project_membership(project_id, user, session):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Project not found."
+        )
+
     result = await session.execute(
         select(ProjectMember).where(ProjectMember.project_id == project_id)
     )
