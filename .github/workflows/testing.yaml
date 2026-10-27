@@ -1,0 +1,35 @@
+name: "Run Tests After a Push"
+on:
+  push:
+    branches:
+      - main
+jobs:
+  test:
+    runs-on: ubuntu-26.04
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
+
+      - name: Install dependencies
+        run: uv sync --no-install-project
+
+      - name: Run tests with coverage
+        run: >-
+          uv run --with pytest-cov python -m pytest tests/*.py
+          --cov=main
+          --cov=db
+          --cov=models
+          --cov=schemas
+          --cov=users
+          --cov=helpers
+          --cov=routers
+          --cov-report=term-missing
+          --cov-fail-under=80
