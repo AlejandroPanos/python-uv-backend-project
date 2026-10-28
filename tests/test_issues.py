@@ -212,6 +212,48 @@ def test_list_issues_requires_project_membership(run_with_database):
     run_with_database(exercise)
 
 
+def test_list_issues_reports_filtered_total_across_pages(run_with_database):
+    async def exercise(
+        client,
+        current_user,
+        session,
+        owner,
+        maintainer,
+        reporter,
+        outsider,
+        project,
+        issue,
+        other_issue,
+        issue_in_other_project,
+        label,
+    ):
+        session.add(
+            Issue(
+                project_id=project.id,
+                reporter_id=owner.id,
+                title="Another open issue",
+                status="open",
+                priority="low",
+            )
+        )
+        await session.commit()
+
+        response = await client.get(
+            f"/api/v1/projects/{project.id}/issues",
+            params={"status": "open", "limit": 1, "offset": 1},
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["total"] == 2
+        assert payload["limit"] == 1
+        assert payload["offset"] == 1
+        assert len(payload["items"]) == 1
+        assert payload["items"][0]["status"] == "open"
+
+    run_with_database(exercise)
+
+
 def test_create_issue_allows_maintainer_and_validates_assignee(run_with_database):
     async def exercise(
         client,
@@ -295,6 +337,54 @@ def test_get_issue_returns_issue_for_maintainer(run_with_database):
             f"/api/v1/issues/{issue.id}", params={"project_id": str(project.id)}
         )
         assert reporter_forbidden.status_code == 401
+
+    run_with_database(exercise)
+
+
+def test_issue_endpoints_cannot_access_an_issue_from_another_project(
+    run_with_database,
+):
+    async def exercise(
+        client,
+        current_user,
+        session,
+        owner,
+        maintainer,
+        reporter,
+        outsider,
+        project,
+        issue,
+        other_issue,
+        issue_in_other_project,
+        label,
+    ):
+        current_user[0] = maintainer
+
+        detail = await client.get(
+            f"/api/v1/issues/{issue_in_other_project.id}",
+            params={"project_id": str(project.id)},
+        )
+        assert detail.status_code == 404
+        assert detail.json()["detail"] == "Issue not found."
+
+        update = await client.patch(
+            f"/api/v1/issues/{issue_in_other_project.id}",
+            params={"project_id": str(project.id)},
+            json={"title": "Cross-project edit"},
+        )
+        assert update.status_code == 404
+        assert update.json()["detail"] == "Issue not found."
+
+        delete = await client.delete(
+            f"/api/v1/issue/{issue_in_other_project.id}",
+            params={"project_id": str(project.id)},
+        )
+        assert delete.status_code == 404
+        assert delete.json()["detail"] == "Issue not found."
+
+        saved_issue = await session.get(Issue, issue_in_other_project.id)
+        assert saved_issue is not None
+        assert saved_issue.title == "Private issue"
 
     run_with_database(exercise)
 

@@ -224,8 +224,12 @@ def test_get_project_returns_member_view_or_not_found_detail(run_with_database):
 
         current_user[0] = outsider
         not_found = await client.get(f"/api/v1/projects/{project.id}")
-        assert not_found.status_code == 200
+        assert not_found.status_code == 404
         assert not_found.json() == {"detail": "Project not found"}
+
+        missing = await client.get(f"/api/v1/projects/{uuid.uuid4()}")
+        assert missing.status_code == 404
+        assert missing.json() == {"detail": "Project not found"}
 
     run_with_database(exercise)
 
@@ -259,14 +263,14 @@ def test_update_project_is_owner_only(run_with_database):
             f"/api/v1/projects/{project.id}",
             json={"name": "Not allowed"},
         )
-        assert forbidden.status_code == 200
+        assert forbidden.status_code == 404
         assert forbidden.json() == {"detail": "Project not found"}
 
         missing = await client.patch(
             f"/api/v1/projects/{uuid.uuid4()}",
             json={"name": "Missing"},
         )
-        assert missing.status_code == 200
+        assert missing.status_code == 404
         assert missing.json() == {"detail": "Project not found"}
 
     run_with_database(exercise)
@@ -283,10 +287,21 @@ def test_delete_project_removes_owned_project(run_with_database):
         project,
         second_project,
     ):
+        current_user[0] = member
+        forbidden = await client.delete(f"/api/v1/projects/{second_project.id}")
+        assert forbidden.status_code == 404
+        assert forbidden.json() == {"detail": "Project not found"}
+        assert await session.get(Project, second_project.id) is not None
+
+        current_user[0] = owner
         response = await client.delete(f"/api/v1/projects/{second_project.id}")
 
         assert response.status_code == 204
         assert await session.get(Project, second_project.id) is None
+
+        missing = await client.delete(f"/api/v1/projects/{second_project.id}")
+        assert missing.status_code == 404
+        assert missing.json() == {"detail": "Project not found"}
 
         remaining = await client.get("/api/v1/projects")
         assert remaining.status_code == 200

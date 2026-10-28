@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, Depends, Response
+from fastapi import APIRouter, Depends, HTTPException, Response
 from datetime import datetime
 from starlette import status
 from sqlalchemy import func, select
@@ -132,7 +132,7 @@ async def get_project(
     )
     row = result.first()
     if not row:
-        return {"detail": "Project not found"}
+        raise HTTPException(status_code=404, detail="Project not found")
     project, role, count = row
     return _to_schema(project, role, count)
 
@@ -152,7 +152,7 @@ async def update_project(
     )
     project = result.scalars().first()
     if not project:
-        return {"detail": "Project not found"}
+        raise HTTPException(status_code=404, detail="Project not found")
     for key, value in body.model_dump().items():
         setattr(project, key, value)
     project.updated_at = datetime.utcnow()
@@ -182,7 +182,7 @@ async def delete_project(
     )
     project = result.scalars().first()
     if not project:
-        return {"detail": "Project not found"}
+        raise HTTPException(status_code=404, detail="Project not found")
 
     await session.delete(project)
     await session.commit()

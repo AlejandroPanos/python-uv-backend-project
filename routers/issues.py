@@ -68,6 +68,23 @@ async def list_issues(
         .scalar_subquery()
     )
 
+    filters = [Issue.project_id == project_id]
+
+    if status_filter:
+        filters.append(Issue.status == status_filter)
+    if priority:
+        filters.append(Issue.priority == priority)
+    if assignee:
+        filters.append(Issue.assignee_id == assignee)
+    if label:
+        issues_with_label = select(IssueLabel.issue_id).where(
+            IssueLabel.label_id == label
+        )
+        filters.append(Issue.id.in_(issues_with_label))
+    if q:
+        filters.append(Issue.title.ilike(f"%{q}%"))
+
+    total = await session.scalar(select(func.count(Issue.id)).where(*filters))
     stmt = (
         select(Issue, comment_count.label("comment_count"))
         .options(
@@ -75,22 +92,8 @@ async def list_issues(
             joinedload(Issue.assignee),
             selectinload(Issue.labels),
         )
-        .where(Issue.project_id == project_id)
+        .where(*filters)
     )
-
-    if status_filter:
-        stmt = stmt.where(Issue.status == status_filter)
-    if priority:
-        stmt = stmt.where(Issue.priority == priority)
-    if assignee:
-        stmt = stmt.where(Issue.assignee_id == assignee)
-    if label:
-        issues_with_label = select(IssueLabel.issue_id).where(
-            IssueLabel.label_id == label
-        )
-        stmt = stmt.where(Issue.id.in_(issues_with_label))
-    if q:
-        stmt = stmt.where(Issue.title.ilike(f"%{q}%"))
 
     column = SORT_COLUMNS[sort]
     stmt = stmt.order_by(column.asc() if order == "asc" else column.desc(), Issue.id)
@@ -107,7 +110,7 @@ async def list_issues(
 
     return IssueListResponse(
         items=items,
-        total=len(items),
+        total=total or 0,
         limit=limit,
         offset=offset,
     )
@@ -212,9 +215,11 @@ async def get_issue_by_id(
             joinedload(Issue.assignee),
             selectinload(Issue.labels),
         )
-        .where(Issue.id == issue_id)
+        .where(Issue.id == issue_id, Issue.project_id == project_id)
     )
     issue = await session.scalar(stmt)
+    if not issue:
+        raise HTTPException(status_code=404, detail="Issue not found.")
 
     issue_response = GetIssueResponse(
         id=issue.id,
@@ -273,7 +278,7 @@ async def patch_issue(
             joinedload(Issue.assignee),
             selectinload(Issue.labels),
         )
-        .where(Issue.id == issue_id)
+        .where(Issue.id == issue_id, Issue.project_id == project_id)
     )
     issue = await session.scalar(stmt)
 
@@ -293,7 +298,6 @@ async def patch_issue(
 
     session.add(issue)
     await session.commit()
-    session.refresh(issue)
 
     updated_issue = PatchIssueResponse(
         id=issue.id,
@@ -344,7 +348,10 @@ async def delete_issue(
             detail="Only the project owner or maintainers can delete issues.",
         )
 
-    stmt = select(Issue).where(Issue.id == issue_id)
+    stmt = select(Issue).where(
+        Issue.id == issue_id,
+        Issue.project_id == project_id,
+    )
     issue = await session.scalar(stmt)
 
     if not issue:
