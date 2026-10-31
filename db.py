@@ -1,11 +1,18 @@
 from collections.abc import AsyncGenerator
+import os
 
 from fastapi import Depends
+from dotenv import load_dotenv
 from fastapi_users.db import SQLAlchemyBaseUserTableUUID, SQLAlchemyUserDatabase
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
 
-DATABASE_URL = "sqlite+aiosqlite:///./test.db"
+load_dotenv()
+
+DATABASE_URL = os.getenv(
+    "DATABASE_URL",
+    "postgresql+psycopg://localhost:5432/project_tracker",
+)
 
 
 class Base(DeclarativeBase):
