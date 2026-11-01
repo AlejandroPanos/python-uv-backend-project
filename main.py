@@ -18,6 +18,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
+# Initialize FastAPI app with lifespan context manager
 app = FastAPI(
     title="Project Tracker API",
     description="A full backend project tracker with a REST API built with FastAPI.",
