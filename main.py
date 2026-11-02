@@ -11,6 +11,7 @@ from db import User
 from routers import health, issues, projects, members, comments, labels
 
 
+# Define lifespan context manager to create database tables on startup
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     async with engine.begin() as conn:
