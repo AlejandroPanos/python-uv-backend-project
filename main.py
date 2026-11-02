@@ -36,6 +36,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Define API v1 router and include authentication and user management routes
 api_v1 = APIRouter(prefix="/api/v1")
 
 api_v1.include_router(
